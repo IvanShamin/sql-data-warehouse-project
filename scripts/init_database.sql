@@ -1,28 +1,26 @@
-/*
-=============================================================
-Data Warehouse Layers in MySQL
-=============================================================
-Script Purpose:
-    Creates the DataWarehouse database with Bronze, Silver, and 
-    Gold placeholder tables. Drops the database first if it exists 
-    to ensure a clean environment.
-*/
+USE master;
+GO
 
-DROP DATABASE IF EXISTS DataWarehouse;
+-- Drop and recreate the 'DataWarehouse' database
+IF EXISTS (SELECT 1 FROM sys.databases WHERE name = 'DataWarehouse')
+BEGIN
+    ALTER DATABASE DataWarehouse SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
+    DROP DATABASE DataWarehouse;
+END;
+GO
+
+-- Create the 'DataWarehouse' database
 CREATE DATABASE DataWarehouse;
+GO
+
 USE DataWarehouse;
+GO
 
--- Bronze layer (raw data ingestion)
-CREATE TABLE bronze_tablename (
-    id INT PRIMARY KEY
-);
+-- Create Schemas
+CREATE SCHEMA bronze;
+GO
 
--- Silver layer (cleaned/validated data)
-CREATE TABLE silver_tablename (
-    id INT PRIMARY KEY
-);
+CREATE SCHEMA silver;
+GO
 
--- Gold layer (curated/aggregated data for reporting)
-CREATE TABLE gold_tablename (
-    id INT PRIMARY KEY
-);
+
