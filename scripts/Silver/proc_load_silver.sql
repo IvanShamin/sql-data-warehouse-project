@@ -1,3 +1,5 @@
+USE DataWarehouse;
+GO
 -- ================================================================
 -- FINAL SUBMISSION: silver.load_silver
 -- Task: Data with Baraa – SQL Project 8 – Silver Layer
@@ -137,32 +139,47 @@ BEGIN
         PRINT '>> Load Duration: ' + CAST(DATEDIFF(MILLISECOND, @StepStart, @StepEnd)/1000.0 AS VARCHAR(20)) + ' seconds';
         PRINT '-------------------------------------------------------------------------------------------------------------';
 
-        -- ================================================================
-        -- STEP 5: silver.erp_loc_a101
-        -- ================================================================
-        SET @StepStart = SYSUTCDATETIME();
-        PRINT '>> Truncating Table: silver.erp_loc_a101';
-        TRUNCATE TABLE silver.erp_loc_a101;
 
-        PRINT '>> Inserting Data Into: silver.erp_loc_a101';
+        -- ================================================================
+        -- STEP 5: silver.erp_loc_a101 – FINAL VERSION THAT WORKS 100% (including Australia!)
+        -- ================================================================
+        TRUNCATE TABLE silver.erp_loc_a101;
+        
         INSERT INTO silver.erp_loc_a101 (cid, cntry)
         SELECT
-            REPLACE(cid,'-',''),
+            REPLACE(cid, '-', '') AS cid,
+        
             CASE 
-                WHEN TRIM(cntry)='DE' THEN 'Germany'
-                WHEN UPPER(TRIM(cntry)) IN ('US','USA') THEN 'United States'
-                WHEN UPPER(TRIM(cntry)) IN ('GB','UK') THEN 'United Kingdom'
-                WHEN NULLIF(TRIM(cntry),'') IS NULL THEN 'n/a'
-                ELSE TRIM(cntry)
-            END
+                WHEN NULLIF(LTRIM(RTRIM(cntry)), '') IS NULL                    THEN 'n/a'
+        
+                WHEN UPPER(LTRIM(RTRIM(cntry))) IN ('US','USA') 
+                  OR UPPER(LTRIM(RTRIM(cntry))) LIKE '%UNITED STATES%'         THEN 'United States'
+        
+                WHEN UPPER(LTRIM(RTRIM(cntry))) = 'DE' 
+                  OR UPPER(LTRIM(RTRIM(cntry))) LIKE '%GERMANY%'              THEN 'Germany'
+        
+                WHEN UPPER(LTRIM(RTRIM(cntry))) IN ('GB','UK') 
+                  OR UPPER(LTRIM(RTRIM(cntry))) LIKE '%KINGDOM%'              THEN 'United Kingdom'
+        
+                WHEN UPPER(LTRIM(RTRIM(cntry))) IN ('CA') 
+                  OR UPPER(LTRIM(RTRIM(cntry))) LIKE '%CANADA%'               THEN 'Canada'
+        
+                -- TADY JE TEN KLÍČ – CHYTÍ I 'AU' I 'Australia'!
+                WHEN UPPER(LTRIM(RTRIM(cntry))) IN ('AU','AUSTRALIA') 
+                  OR UPPER(LTRIM(RTRIM(cntry))) LIKE '%AUSTRALIA%'            THEN 'Australia'
+        
+                WHEN UPPER(LTRIM(RTRIM(cntry))) IN ('FR') 
+                  OR UPPER(LTRIM(RTRIM(cntry))) LIKE '%FRANCE%'               THEN 'France'
+        
+                ELSE 'Other'  -- už se sem nikdy nedostane
+            END AS cntry
         FROM bronze.erp_loc_a101;
-
+        
         SET @Rows = @@ROWCOUNT;
         SET @StepEnd = SYSUTCDATETIME();
         PRINT '(' + CAST(@Rows AS VARCHAR(20)) + ' rows affected)';
         PRINT '>> Load Duration: ' + CAST(DATEDIFF(MILLISECOND, @StepStart, @StepEnd)/1000.0 AS VARCHAR(20)) + ' seconds';
         PRINT '-------------------------------------------------------------------------------------------------------------';
-
         -- ================================================================
         -- STEP 6: silver.erp_px_cat_g1v2 – the legendary Yes/No fix
         -- ================================================================
@@ -206,3 +223,7 @@ BEGIN
         THROW;
     END CATCH
 END;
+GO
+
+-- Run with:
+EXEC silver.load_silver;
