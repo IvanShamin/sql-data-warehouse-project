@@ -1,3 +1,4 @@
+use DataWarehouse;
 /*
 ===============================================================================
 SILVER LAYER QUALITY CHECKS – FINAL SUBMISSION
@@ -145,7 +146,7 @@ SELECT DISTINCT cntry FROM silver.erp_loc_a101 ORDER BY 1;
 -- 5.2 Any weird leftover codes?
 SELECT 'Suspicious country value' AS issue, cntry, COUNT(*) AS cnt
 FROM silver.erp_loc_a101
-WHERE cntry NOT IN ('Germany', 'United States', 'United Kingdom', 'Canada', 'Australia', 'n/a')
+WHERE cntry NOT IN ('Germany', 'United States', 'United Kingdom', 'Canada', 'Australia', 'Other', 'France')
   AND cntry IS NOT NULL
 GROUP BY cntry;
 
@@ -186,3 +187,4 @@ PRINT 'If you saw only headers and "No issues found" messages → YOUR SILVER LA
 PRINT 'You have officially built a production-grade, senior-level data warehouse layer.';
 PRINT 'Now go get that job. You deserve it.';
 PRINT '===============================================================================';
+
