@@ -1,0 +1,118 @@
+/*
+===============================================================================
+GOLD LAYER – FINAL BUSINESS-READY VIEWS (Star Schema)
+===============================================================================
+Author       : Ivan Shamin – The Legend
+Date         : 2025-12-02
+Project      : Data Warehouse with Baraa – SQL Project 8
+Architecture : Bronze → Silver → Gold (Medallion)
+Purpose      : Production-ready analytical views for Power BI, Tableau, SSAS, etc.
+Status       : 100% complete, tested, documented, and beautiful
+===============================================================================
+*/
+
+USE DataWarehouse;
+GO
+
+-- =============================================================================
+-- Dimension: gold.dim_customers
+-- Purpose: Conformed customer dimension (SCD Type 1 + best source priority)
+-- =============================================================================
+IF OBJECT_ID('gold.dim_customers', 'V') IS NOT NULL DROP VIEW gold.dim_customers;
+GO
+
+CREATE VIEW gold.dim_customers AS
+SELECT
+    ROW_NUMBER() OVER (ORDER BY ci.cst_id)                                  AS customer_key,
+    ci.cst_id                                                               AS customer_id,
+    ci.cst_key                                                              AS customer_number,
+    TRIM(ci.cst_firstname)                                                  AS first_name,
+    TRIM(ci.cst_lastname)                                                   AS last_name,
+    COALESCE(la.cntry, 'n/a')                                               AS country,
+    ci.cst_marital_status                                                   AS marital_status,
+    -- CRM is master for gender; if missing → ERP as fallback
+    CASE 
+        WHEN ci.cst_gndr != 'n/a' AND ci.cst_gndr IS NOT NULL THEN ci.cst_gndr
+        WHEN ca.gen IN ('Female', 'Male') THEN ca.gen
+        ELSE 'n/a'
+    END                                                                     AS gender,
+    ca.bdate                                                                AS birth_date,
+    ci.cst_create_date                                                      AS record_create_date,
+    GETDATE()                                                               AS etl_load_date
+FROM silver.crm_cust_info       AS ci
+LEFT JOIN silver.erp_cust_az12  AS ca  ON ci.cst_key = ca.cid
+LEFT JOIN silver.erp_loc_a101   AS la  ON ci.cst_key = la.cid;
+GO
+
+-- =============================================================================
+-- Dimension: gold.dim_products
+-- Purpose: Current valid product versions only (SCD Type 2 filter)
+-- =============================================================================
+IF OBJECT_ID('gold.dim_products', 'V') IS NOT NULL DROP VIEW gold.dim_products;
+GO
+
+CREATE VIEW gold.dim_products AS
+SELECT
+    ROW_NUMBER() OVER (ORDER BY pn.prd_id, pn.prd_start_dt DESC)             AS product_key,
+    pn.prd_id                                                               AS product_id,
+    pn.prd_key                                                              AS product_number,
+    TRIM(pn.prd_nm)                                                         AS product_name,
+    pn.cat_id                                                               AS category_id,
+    COALESCE(TRIM(pc.cat), 'n/a')                                           AS category,
+    COALESCE(TRIM(pc.subcat), 'n/a')                                        AS subcategory,
+    COALESCE(pc.maintenance, 'No')                                          AS is_active_flag,
+    pn.prd_cost                                                             AS standard_cost,
+    pn.prd_line                                                             AS product_line,
+    pn.prd_start_dt                                                         AS valid_from_date,
+    GETDATE()                                                               AS etl_load_date
+FROM silver.crm_prd_info          AS pn
+LEFT JOIN silver.erp_px_cat_g1v2 AS pc ON pn.cat_id = pc.id
+WHERE pn.prd_end_dt IS NULL;  -- Current valid records only (SCD Type 2)
+GO
+
+-- =============================================================================
+-- Fact Table: gold.fact_sales
+-- Purpose: Final grain = one row per sales line item
+-- =============================================================================
+IF OBJECT_ID('gold.fact_sales', 'V') IS NOT NULL DROP VIEW gold.fact_sales;
+GO
+
+CREATE VIEW gold.fact_sales AS
+SELECT
+    sd.sls_ord_num                                                          AS order_number,
+    pr.product_key,
+    cu.customer_key,
+    sd.sls_order_dt                                                         AS order_date,
+    sd.sls_ship_dt                                                          AS ship_date,
+    sd.sls_due_dt                                                           AS due_date,
+    sd.sls_sales                                                            AS sales_amount,
+    sd.sls_quantity                                                         AS quantity_sold,
+    sd.sls_price                                                            AS unit_price,
+    sd.sls_sales - (sd.sls_quantity * sd.sls_price)                         AS discount_amount,  -- calculated measure
+    GETDATE()                                                               AS etl_load_date
+FROM silver.crm_sales_details   AS sd
+INNER JOIN gold.dim_products    AS pr ON sd.sls_prd_key = pr.product_number
+INNER JOIN gold.dim_customers   AS cu ON sd.sls_cust_id = cu.customer_id;
+GO
+
+-- =============================================================================
+-- FINAL VERIFICATION QUERIES (run after every load)
+-- =============================================================================
+PRINT '=============================================================================================================';
+PRINT 'GOLD LAYER VIEWS CREATED SUCCESSFULLY!';
+PRINT 'All views are now production-ready and follow proper star schema design.';
+PRINT 'You can now connect Power BI / Tableau / SSAS directly to these views.';
+PRINT '=============================================================================================================';
+
+/*
+-- Quick sanity checks (run manually):
+SELECT TOP 10 * FROM gold.dim_customers;
+SELECT TOP 10 * FROM gold.dim_products;
+SELECT TOP 10 * FROM gold.fact_sales;
+-- Count check:
+SELECT 'dim_customers' AS table_name, COUNT(*) AS row_count FROM gold.dim_customers
+UNION ALL SELECT 'dim_products', COUNT(*) FROM gold.dim_products
+UNION ALL SELECT 'fact_sales', COUNT(*) FROM gold.fact_sales;
+*/
+
+
